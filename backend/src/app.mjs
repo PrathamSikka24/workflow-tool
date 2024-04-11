@@ -1,115 +1,137 @@
 import express from 'express';
-import { Octokit } from '@octokit/rest'; // Ensure this matches the export from @octokit/rest
-import axios from 'axios';
-import cookieParser from 'cookie-parser';
-import dotenv from 'dotenv';
-dotenv.config();
-
-
+import { Octokit } from '@octokit/rest'; // Ensure correct import for using GitHub's REST API
+import axios from 'axios'; // For making HTTP requests
 const app = express();
-const port = 3001;
+const port = 3000;
 
-// Body parser middleware to handle JSON payloads
 app.use(express.json());
-app.use(cookieParser());
 
-app.post('/create-repo', async (req, res) => {
-  const authToken = req.cookies.githubToken;
-  if (!authToken) {
-    return res.status(401).send('Unauthorized: No token provided');
+app.post('/start-auth', (req, res) => {
+  const { clientId, clientSecret } = req.body;
+
+  if (!clientId || !clientSecret) {
+    return res.status(400).send('Client ID and Client Secret are required.');
   }
 
+  
+  app.get('/github/callback', async (req, res) => {
+    const { code } = req.query;
+    // clientId and clientSecret should ideally not be hard-coded here but obtained securely
+    const clientId = Process.env.CLIENT_ID;
+    const clientSecret = '2458037144a2a0909495eb4c520905af59f33d1a';
+
+    try {
+        const githubResponse = await axios.post('https://github.com/login/oauth/access_token', {
+            client_id: clientId,
+            client_secret: clientSecret,
+            code: code,
+        }, {
+            headers: { Accept: 'application/json' },
+        });
+
+        const accessToken = githubResponse.data.access_token;
+        
+        // Log the accessToken here, within the same scope
+        console.log('Access token:', accessToken);
+
+        res.send("Authentication successful, you can close this window.");
+    } catch (error) {
+        console.error('Failed to exchange code for token:', error);
+        res.status(500).send('Authentication failed');
+    }
+});
+
+  // IMPORTANT: This example simplifies the flow. In a real application, ensure secure handling of client credentials.
+
+  const redirectUri = encodeURIComponent("http://localhost:3000/github/callback");
+  const scopes = encodeURIComponent("repo,admin:org,admin:public_key,admin:repo_hook,admin:org_hook,gist,user,delete_repo,write:packages,read:packages,delete:packages,admin:gpg_key,workflow");
+
+  const authUrl = `https://github.com/login/oauth/authorize?client_id=${clientId}&redirect_uri=${redirectUri}&scope=${scopes}`;
+
+  // Send the GitHub authorization URL back to the client for redirection
+  res.json({ authUrl });
+});
+async function fetchUserRepos(accessToken) {
+  const octokit = new Octokit({ auth: accessToken }); // Ensure this matches the token format
   try {
-    // Initialize Octokit with the OAuth token
-    const octokit = new Octokit({ auth: authToken });
-
-    // Specify the name of the repository
-    const repoName = 'Hello-World-Repo'; // This could also come from the user
-
-    // Create the repository
-    const repo = await createRepository(octokit, repoName);
-
-    // Create the README file in the repository
-    const readme = await createReadme(octokit, repoName);
-
-    res.status(200).json({
-      message: 'Repository and README created successfully',
-      repoUrl: repo.html_url,
-      readmeUrl: readme.content.html_url,
-    });
+      const response = await octokit.rest.repos.listForAuthenticatedUser({});
+      return response.data; // This should be an array of repositories
   } catch (error) {
-    console.error(error);
-    res.status(500).json({
-      message: 'Error creating repository or README',
-      error: serializeError(error),
-    });
+      console.error("Error fetching repositories:", error);
+      throw error; // Handle or propagate error as needed
+  }
+}
+
+app.post('/get-repos', async (req, res) => {
+  const { accessToken } = req.body;
+  if (!accessToken) {
+      return res.status(400).send('Access token is required');
+  }
+  
+  try {
+      const repos = await fetchUserRepos(accessToken);
+      res.json(repos);
+  } catch (error) {
+      res.status(500).send("Failed to fetch repositories");
   }
 });
 
-app.get('/auth/github', (req, res) => {
-  const clientId = process.env.CLIENT_ID;
-  const redirectUri = encodeURIComponent('http://localhost:3000/github/callback');
-  const scopes = encodeURIComponent('repo user');
-  res.redirect(`https://github.com/login/oauth/authorize?client_id=${clientId}&redirect_uri=${redirectUri}&scope=${scopes}`);
+app.post('/list-issues', async (req, res) => {
+  const { accessToken, owner, repo } = req.body;
+
+  if (!accessToken || !owner || !repo) {
+      return res.status(400).send('Access token, owner, and repo are required.');
+  }
+  
+  try {
+      const octokit = new Octokit({ auth: accessToken });
+      const response = await octokit.rest.issues.listForRepo({
+          owner,
+          repo,
+          state: 'all', // This line can be adjusted to 'open' or 'closed' as needed
+      });
+      res.json(response.data); // Sends the list of issues back to the client
+  } catch (error) {
+      console.error("Error listing issues for repository:", error);
+      res.status(500).send("Failed to list issues for the selected repository.");
+  }
 });
+
+app.post('/create-cards-for-issues', async (req, res) => {
+  const { accessToken, owner, repo, columnId } = req.body;
+
+  if (!accessToken || !owner || !repo || !columnId) {
+    return res.status(400).send('Access token, owner, repo, and columnId are required.');
+  }
+  
+  try {
+    const octokit = new Octokit({ auth: accessToken });
+    const issuesResponse = await octokit.rest.issues.listForRepo({
+      owner,
+      repo,
+      state: 'open',
+    });
+
+    for (const issue of issuesResponse.data) {
+      await octokit.rest.projects.createCard({
+        column_id: columnId,
+        content_url: issue.url,
+      });
+    }
+
+    res.send(`${issuesResponse.data.length} issue cards created.`);
+  } catch (error) {
+    console.error("Error processing request:", error);
+    // Forward the status code from GitHub's API if available
+    const statusCode = error.status || 500;
+    const message = error.response?.data.message || "Failed to create issue cards.";
+    res.status(statusCode).send(message);
+  }
+});
+
+
+
+
 app.listen(port, () => {
   console.log(`Server listening at http://localhost:${port}`);
 });
-
-async function createRepository(octokitInstance, name) {
-  const response = await octokitInstance.rest.repos.createForAuthenticatedUser({
-    name,
-    auto_init: false // We'll create the README manually
-  });
-  return response.data;
-}
-
-app.get('/github/callback', async (req, res) => {
-  const code = req.query.code;
-  if (!code) {
-    return res.status(400).send('Code query parameter is missing.');
-  }
-
-  try {
-    const response = await axios.post('https://github.com/login/oauth/access_token', {
-      client_id: 'fd229ea37853a885cb64', // Consider moving these to environment variables
-      client_secret: '34907a1a848e3b3f3a0f0c78eb257954d6e05bef',
-      code,
-    }, { headers: { Accept: 'application/json' } });
-
-    const accessToken = response.data.access_token;
-
-    // Set the access token in a secure, HTTP-only cookie
-    res.cookie('githubToken', accessToken, { httpOnly: true, secure: process.env.NODE_ENV === 'production' });
-
-    // Redirect to a route that triggers the repository creation
-    res.redirect('/create-repo'); // This should match the expected behavior of the frontend or further processing
-  } catch (error) {
-    console.error('Error exchanging the code for an access token', error);
-    if (!res.headersSent) {
-      res.status(500).send('Authentication failed');
-    }
-  }
-});
-
-
-async function createReadme(octokitInstance, repoName) {
-  const content = `# ${repoName}\n\nHello World`;
-  const response = await octokitInstance.rest.repos.createOrUpdateFileContents({
-    owner: 'PrathamSikka24',
-    repo: repoName,
-    path: 'README.md',
-    message: 'Initial commit with README',
-    content: Buffer.from(content).toString('base64'),
-  });
-  return response.data;
-}
-
-function serializeError(error) {
-  return Object.getOwnPropertyNames(error).reduce((errorMap, key) => {
-    errorMap[key] = error[key];
-    return errorMap;
-  }, {});
-}
-
-// No need to export these functions if they are not used elsewhere
