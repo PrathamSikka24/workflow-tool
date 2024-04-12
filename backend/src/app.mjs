@@ -17,9 +17,8 @@ app.post('/start-auth', (req, res) => {
   app.get('/github/callback', async (req, res) => {
     const { code } = req.query;
     // clientId and clientSecret should ideally not be hard-coded here but obtained securely
-    const clientId = Process.env.CLIENT_ID;
-    const clientSecret = '2458037144a2a0909495eb4c520905af59f33d1a';
-
+    const clientId = "34daa77abe5743f4cb2a";
+    const clientSecret ="2458037144a2a0909495eb4c520905af59f33d1a";
     try {
         const githubResponse = await axios.post('https://github.com/login/oauth/access_token', {
             client_id: clientId,

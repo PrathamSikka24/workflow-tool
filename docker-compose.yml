@@ -1,0 +1,18 @@
+version: '3.9'
+
+services:
+  # Node.js/Express API service
+  api:
+    build: ./backend
+    ports:
+      - "3000:3000" # Maps port 3000 from the container to 3000 on your host
+    environment:
+      - PORT=3000
+
+  # React Frontend service
+  front_end:
+    build: ./frontend
+    ports:
+      - "5173:5173" # Maps port 5173 from the container to 5173 on your host
+    depends_on:
+      - api
