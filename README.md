@@ -24,7 +24,7 @@ This tool is designed to streamline your GitHub workflow by providing a user-fri
 ## Usage
 
 1. Open your browser and navigate to `http://localhost:4173`.
-2. Log in with your GitHub credentials to authorize the application.
+2. Log in with your GitHub credentials(Client ID and Client Secret) to authorize the application.
 3. Once logged in, you'll be able to view all your repositories.
 4. Select a repository to view its issues.
 5. Any new issue added to the repository will automatically create a project ticket in the GitHub Projects section.
