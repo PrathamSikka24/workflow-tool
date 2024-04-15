@@ -1,0 +1,47 @@
+name: Build and Deploy Workflow automation tool
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - workflow-tool/**'
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v2
+
+    - name: Set up Node.js for Backend
+      uses: actions/setup-node@v2
+      with:
+        node-version: '14.x'
+
+    - name: Install Backend Dependencies
+      run: |
+        cd workflow-tool/backend
+        npm install
+
+    - name: Build Backend
+      run: |
+        cd workflow-tool/backend
+        npm run build
+
+    - name: Set up Node.js for Frontend
+      uses: actions/setup-node@v2
+      with:
+        node-version: '14.x'
+
+    - name: Install Frontend Dependencies
+      run: |
+        cd workflow-tool/frontend
+        npm install
+
+    - name: Build Frontend
+      run: |
+        cd workflow-tool/frontend
+        npm run build
+
+    # Add deployment steps if needed
