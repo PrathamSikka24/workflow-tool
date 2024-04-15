@@ -1,10 +1,15 @@
-name: Build and Deploy Workflow automation tool
+name: Build and Deploy Workflow Automation Tool
 
 on:
   push:
     branches: [main]
     paths:
-      - workflow-tool/**'
+      - 'workflow-tool/**'
+  workflow_dispatch:
+    inputs:
+      trigger-build:
+        description: 'Trigger a manual build'
+        required: false
 
 jobs:
   build-and-deploy:
