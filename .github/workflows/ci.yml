@@ -19,6 +19,9 @@ jobs:
     - name: Checkout Repository
       uses: actions/checkout@v2
 
+    - name: Install Root Dependencies
+      run: npm install
+
     - name: Set up Node.js for Backend
       uses: actions/setup-node@v2
       with:
